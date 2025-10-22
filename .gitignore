@@ -1,0 +1,23 @@
+# Bỏ qua tất cả các thư mục node_modules
+**/node_modules
+
+# Bỏ qua các file biến môi trường (RẤT QUAN TRỌNG)
+.env
+.env.local
+.env.development
+.env.production
+
+# Bỏ qua các file biến môi trường trong từng folder con
+client/.env
+server/.env
+
+# Bỏ qua các thư mục build/dist
+build/
+dist/
+client/build/
+client/dist/
+server/dist/
+
+# Bỏ qua file log
+*.log
+npm-debug.log*
