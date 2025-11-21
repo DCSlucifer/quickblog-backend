@@ -4,6 +4,8 @@ import cors from 'cors'
 import connectDB from './configs/db.js';
 import adminRouter from './routes/adminRoutes.js';
 import blogRouter from './routes/blogRoutes.js';
+import swaggerUi from 'swagger-ui-express';
+import swaggerSpecs from './configs/swagger.js';
 
 const app = express();
 
@@ -17,6 +19,7 @@ app.use(express.json())
 app.get('/', (req, res)=> res.send("API is Working"))
 app.use('/api/admin', adminRouter)
 app.use('/api/blog', blogRouter)
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpecs));
 
 const PORT = process.env.PORT || 3000;
 
