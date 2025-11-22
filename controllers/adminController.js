@@ -9,14 +9,14 @@ export const adminLogin = async (req, res) => {
 
         // Verify admin credentials against environment variables
         if (email !== process.env.ADMIN_EMAIL || password !== process.env.ADMIN_PASSWORD) {
-            return res.json({ success: false, message: "Invalid Credentials" })
+            return res.status(401).json({ success: false, message: "Invalid Credentials" })
         }
 
-        // Generate JWT token for authenticated session
-        const token = jwt.sign({ email }, process.env.JWT_SECRET)
-        res.json({ success: true, token })
+        // Generate JWT token for authenticated session (expires in 24 hours)
+        const token = jwt.sign({ email }, process.env.JWT_SECRET, { expiresIn: '24h' })
+        res.status(200).json({ success: true, token })
     } catch (error) {
-        res.json({ success: false, message: error.message })
+        res.status(500).json({ success: false, message: error.message })
     }
 }
 
@@ -24,9 +24,9 @@ export const adminLogin = async (req, res) => {
 export const getAllBlogsAdmin = async (req, res) => {
     try {
         const blogs = await Blog.find({}).sort({ createdAt: -1 });
-        res.json({ success: true, blogs })
+        res.status(200).json({ success: true, blogs })
     } catch (error) {
-        res.json({ success: false, message: error.message })
+        res.status(500).json({ success: false, message: error.message })
     }
 }
 
@@ -34,9 +34,9 @@ export const getAllBlogsAdmin = async (req, res) => {
 export const getAllComments = async (req, res) => {
     try {
         const comments = await Comment.find({}).populate("blog").sort({ createdAt: -1 })
-        res.json({ success: true, comments })
+        res.status(200).json({ success: true, comments })
     } catch (error) {
-        res.json({ success: false, message: error.message })
+        res.status(500).json({ success: false, message: error.message })
     }
 }
 
@@ -45,21 +45,21 @@ export const getDashboard = async (req, res) => {
     try {
         // Get 5 most recent blogs
         const recentBlogs = await Blog.find({}).sort({ createdAt: -1 }).limit(5);
-        
+
         // Count total blogs, comments, and drafts
         const blogs = await Blog.countDocuments();
         const comments = await Comment.countDocuments()
         const drafts = await Blog.countDocuments({ isPublished: false })
 
         const dashboardData = {
-            blogs, 
-            comments, 
-            drafts, 
+            blogs,
+            comments,
+            drafts,
             recentBlogs
         }
-        res.json({ success: true, dashboardData })
+        res.status(200).json({ success: true, dashboardData })
     } catch (error) {
-        res.json({ success: false, message: error.message })
+        res.status(500).json({ success: false, message: error.message })
     }
 }
 
@@ -68,9 +68,9 @@ export const deleteCommentById = async (req, res) => {
     try {
         const { id } = req.body;
         await Comment.findByIdAndDelete(id);
-        res.json({ success: true, message: "Comment deleted successfully" })
+        res.status(200).json({ success: true, message: "Comment deleted successfully" })
     } catch (error) {
-       res.json({ success: false, message: error.message }) 
+       res.status(500).json({ success: false, message: error.message })
     }
 }
 
@@ -79,8 +79,8 @@ export const approveCommentById = async (req, res) => {
     try {
         const { id } = req.body;
         await Comment.findByIdAndUpdate(id, { isApproved: true });
-        res.json({ success: true, message: "Comment approved successfully" })
+        res.status(200).json({ success: true, message: "Comment approved successfully" })
     } catch (error) {
-       res.json({ success: false, message: error.message }) 
+       res.status(500).json({ success: false, message: error.message })
     }
 }
