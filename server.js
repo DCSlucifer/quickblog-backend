@@ -15,9 +15,11 @@ await connectDB()
 // Middlewares
 app.use(cors({
     origin: [
+        'https://quickblog-frontend-3klplshp7-plitzees-projects.vercel.app',
         'https://quickblog-frontend-3n2wx8nvi-plitzees-projects.vercel.app',
+        'https://quickblog-frontend-2h1ixuxa7-plitzees-projects.vercel.app',
         'https://quickblog-frontend-bp8vokh76-plitzees-projects.vercel.app',
-        /\.vercel\.app$/,
+        /^https:\/\/quickblog-frontend-.*\.vercel\.app$/,
         'http://localhost:5173'
     ],
     credentials: true
