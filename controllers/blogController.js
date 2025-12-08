@@ -4,6 +4,7 @@ import imagekit from '../configs/imageKit.js';
 import Blog from '../models/Blog.js';
 import Comment from '../models/Comment.js';
 import main from '../configs/gemini.js';
+import { sendNewBlogNotification, sendBlogUpdateNotification } from '../utils/emailService.js';
 
 // Add new blog with image upload to ImageKit
 export const addBlog = async (req, res) => {
@@ -38,7 +39,12 @@ export const addBlog = async (req, res) => {
         const image = optimizedImageUrl;
 
         // Create new blog entry in database
-        await Blog.create({ title, subTitle, description, category, image, isPublished })
+        const newBlog = await Blog.create({ title, subTitle, description, category, image, isPublished })
+
+        // Send notification if blog is published (async - won't block)
+        if (isPublished) {
+            sendNewBlogNotification(newBlog).catch(err => console.log('Blog notification failed:', err.message));
+        }
 
         // Clean up: Delete temporary file after successful upload
         fs.unlinkSync(imageFile.path);
@@ -145,6 +151,11 @@ export const togglePublish = async (req, res) => {
         blog.isPublished = !blog.isPublished;
         await blog.save();
 
+        // Send notification if blog was just published
+        if (blog.isPublished) {
+            sendNewBlogNotification(blog).catch(err => console.log('Publish notification failed:', err.message));
+        }
+
         res.status(200).json({ success: true, message: 'Blog status updated' })
     } catch (error) {
         res.status(500).json({ success: false, message: error.message })
@@ -234,6 +245,11 @@ export const updateBlog = async (req, res) => {
 
         // Save updated blog
         await blog.save();
+
+        // Send update notification if blog is published
+        if (blog.isPublished) {
+            sendBlogUpdateNotification(blog).catch(err => console.log('Update notification failed:', err.message));
+        }
 
         res.status(200).json({ success: true, message: 'Blog updated successfully', blog })
 

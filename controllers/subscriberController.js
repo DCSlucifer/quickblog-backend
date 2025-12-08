@@ -1,4 +1,5 @@
 import Subscriber from '../models/Subscriber.js';
+import { sendWelcomeEmail } from '../utils/emailService.js';
 
 // Subscribe to newsletter - Public endpoint
 export const subscribe = async (req, res) => {
@@ -37,6 +38,9 @@ export const subscribe = async (req, res) => {
 
         // Create new subscriber
         const newSubscriber = await Subscriber.create({ email: email.toLowerCase() });
+
+        // Send welcome email (async - won't block)
+        sendWelcomeEmail(newSubscriber.email).catch(err => console.log('Welcome email failed:', err.message));
 
         res.status(201).json({
             success: true,
