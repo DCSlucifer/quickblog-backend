@@ -419,27 +419,6 @@ curl -X POST "http://localhost:3000/api/admin/generate" \
 
 ---
 
-## Screenshots
-
-> **Add your application screenshots here:**
-
-### Homepage
-![Homepage](./screenshots/homepage.png)
-
-### Blog Editor
-![Blog Editor](./screenshots/editor.png)
-
-### AI Generation Interface
-![AI Generation](./screenshots/ai-generation.png)
-
-### Admin Dashboard
-![Admin Dashboard](./screenshots/admin-dashboard.png)
-
-### Mobile Responsive View
-![Mobile View](./screenshots/mobile-view.png)
-
----
-
 ## Deployment
 
 ### Backend Deployment (Recommended: Render/Railway)
@@ -494,27 +473,13 @@ QuickBlog-FullStack/
 
 ---
 
-## Contributors & Acknowledgments
-
-<table>
-<tr>
-<td align="center">
-<strong>Project Lead / Full-Stack Developer</strong><br>
-<a href="https://github.com/yourusername">
-<!-- Add your photo here -->
-<img src="https://via.placeholder.com/100x100" width="100px" alt="Your Name"/><br>
-<sub><b>Your Name</b></sub>
-</a>
-</td>
-</tr>
-</table>
 
 ### Academic Acknowledgments
 
-This project was developed as part of the **Capstone Project** at **[Your University Name]**.
+This project was developed as part of the **Capstone Project** at **UIT**.
 
 **Faculty Advisor:**
-- Prof. [Professor Name] — *Project Supervisor*
+- Prof. Nguyen Thanh Binh — *Project Supervisor*
 
 ### Special Thanks
 
