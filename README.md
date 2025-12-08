@@ -479,7 +479,7 @@ QuickBlog-FullStack/
 This project was developed as part of the **Capstone Project** at **UIT**.
 
 **Faculty Advisor:**
-- Prof. Nguyen Thanh Binh — *Project Supervisor*
+- Dr. Nguyen Thanh Binh — *Project Supervisor*
 
 ### Special Thanks
 
