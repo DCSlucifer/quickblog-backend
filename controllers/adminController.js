@@ -1,39 +1,87 @@
-import jwt from 'jsonwebtoken'
-import Blog from '../models/Blog.js';
-import Comment from '../models/Comment.js';
+import jwt from "jsonwebtoken";
+import User from "../models/User.js";
+import bcrypt from "bcryptjs";
+import Blog from "../models/Blog.js";
+import Comment from "../models/Comment.js";
 
 // Admin login handler - validates credentials and generates JWT token
 export const adminLogin = async (req, res) => {
     try {
         const { email, password } = req.body;
 
-        // Verify admin credentials against environment variables
-        if (email !== process.env.ADMIN_EMAIL || password !== process.env.ADMIN_PASSWORD) {
-            return res.status(401).json({ success: false, message: "Invalid Credentials" })
+        // Check if any users exist, if not, create default Super Admin
+        const userCount = await User.countDocuments();
+        if (userCount === 0) {
+            if (email === process.env.ADMIN_EMAIL && password === process.env.ADMIN_PASSWORD) {
+                const hashedPassword = await bcrypt.hash(password, 10);
+                const user = await User.create({
+                    name: 'Super Admin',
+                    email,
+                    password: hashedPassword,
+                    role: 'super_admin'
+                });
+                const token = jwt.sign({ id: user._id, role: user.role }, process.env.JWT_SECRET, { expiresIn: '24h' });
+                return res.status(200).json({ success: true, token, message: "Super Admin Created and Logged In" });
+            }
         }
 
-        // Generate JWT token for authenticated session (expires in 24 hours)
-        const token = jwt.sign({ email }, process.env.JWT_SECRET, { expiresIn: '24h' })
-        res.status(200).json({ success: true, token })
+        const user = await User.findOne({ email });
+
+        if (!user) {
+            return res.status(401).json({ success: false, message: "Invalid Credentials" });
+        }
+
+        const isMatch = await bcrypt.compare(password, user.password);
+
+        if (!isMatch) {
+            return res.status(401).json({ success: false, message: "Invalid Credentials" });
+        }
+
+        const token = jwt.sign({ id: user._id, role: user.role }, process.env.JWT_SECRET, { expiresIn: '24h' });
+
+        res.status(200).json({ success: true, token });
+
     } catch (error) {
         res.status(500).json({ success: false, message: error.message })
     }
 }
 
-// Fetch all blogs for admin panel - sorted by creation date
+// Fetch all blogs for admin panel - sorted by creation date with filtering
 export const getAllBlogsAdmin = async (req, res) => {
     try {
-        const blogs = await Blog.find({}).sort({ createdAt: -1 });
+        const { category, status, author, tags } = req.query;
+        let query = {};
+
+        if (category) query.category = category;
+        if (status) query.isPublished = status === 'published';
+        if (author) query.author = author;
+        if (tags) query.tags = { $in: tags.split(',') };
+
+        const blogs = await Blog.find(query)
+            .populate('author', 'name')
+            .sort({ createdAt: -1 });
         res.status(200).json({ success: true, blogs })
     } catch (error) {
         res.status(500).json({ success: false, message: error.message })
     }
 }
 
-// Fetch all comments with associated blog details for admin review
+// Fetch all comments with associated blog details for admin review with filtering
 export const getAllComments = async (req, res) => {
     try {
-        const comments = await Comment.find({}).populate("blog").sort({ createdAt: -1 })
+        const { status, startDate, endDate, blogId } = req.query;
+        let query = {};
+
+        if (status) query.isApproved = status === 'approved';
+        if (blogId) query.blog = blogId;
+        if (startDate && endDate) {
+            query.createdAt = {
+                $gte: new Date(startDate),
+                $lte: new Date(endDate)
+            };
+        }
+
+        const comments = await Comment.find(query).populate("blog", "title").sort({ createdAt: -1 })
         res.status(200).json({ success: true, comments })
     } catch (error) {
         res.status(500).json({ success: false, message: error.message })
@@ -41,7 +89,7 @@ export const getAllComments = async (req, res) => {
 }
 
 // Fetch dashboard statistics and recent blogs for admin overview
-export const getDashboard = async (req, res) => {
+export const adminDashboard = async (req, res) => {
     try {
         // Get 5 most recent blogs
         const recentBlogs = await Blog.find({}).sort({ createdAt: -1 }).limit(5);
@@ -64,7 +112,8 @@ export const getDashboard = async (req, res) => {
 }
 
 // Delete a specific comment by ID
-export const deleteCommentById = async (req, res) => {
+// Delete a specific comment by ID
+export const deleteComment = async (req, res) => {
     try {
         const { id } = req.body;
         await Comment.findByIdAndDelete(id);
@@ -75,12 +124,25 @@ export const deleteCommentById = async (req, res) => {
 }
 
 // Approve a comment to make it visible on the blog
-export const approveCommentById = async (req, res) => {
+export const approveComment = async (req, res) => {
     try {
         const { id } = req.body;
         await Comment.findByIdAndUpdate(id, { isApproved: true });
         res.status(200).json({ success: true, message: "Comment approved successfully" })
     } catch (error) {
        res.status(500).json({ success: false, message: error.message })
+    }
+}
+
+// Delete a blog from admin panel
+export const deleteBlogAdmin = async (req, res) => {
+    try {
+        const { id } = req.params;
+        await Blog.findByIdAndDelete(id);
+        // Also delete associated comments? Ideally yes, but keeping simple.
+        await Comment.deleteMany({ blog: id });
+        res.status(200).json({ success: true, message: "Blog deleted successfully" })
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message })
     }
 }

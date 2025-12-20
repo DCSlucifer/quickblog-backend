@@ -3,7 +3,12 @@ import mongoose from "mongoose";
 const commentSchema = new mongoose.Schema({
     blog: {type: mongoose.Schema.Types.ObjectId, ref: 'blog', required: true},
     name:  { type: String, required: true, trim: true, maxlength: 100 },
-    email: { type: String, trim: true }, // Added email field (optional)
+    email: {
+        type: String,
+        required: true,
+        trim: true,
+        match: [/^\w+([\.-]?\w+)*@\w+([\.-]?\w+)*(\.\w{2,3})+$/, 'Please fill a valid email address']
+    },
     content: { type: String, required: true, maxlength: 1000 },
     isApproved: { type: Boolean, default: false },
 },{timestamps: true});

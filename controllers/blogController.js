@@ -76,9 +76,16 @@ export const getAllBlogs = async (req, res) => {
         if (category) {
             query.category = category;
         }
+        if (req.query.tags) {
+            query.tags = { $in: req.query.tags.split(',') };
+        }
+        if (req.query.author) {
+            query.author = req.query.author;
+        }
 
         // Fetch blogs with pagination
         const blogs = await Blog.find(query)
+            .populate('author', 'name email')
             .sort({ createdAt: -1 })
             .skip(skip)
             .limit(limit);
@@ -166,8 +173,8 @@ export const togglePublish = async (req, res) => {
 // Add a new comment to a blog (requires admin approval)
 export const addComment = async (req, res) => {
     try {
-        const { blog, name, content } = req.body;
-        await Comment.create({ blog, name, content });
+        const { blog, name, email, content } = req.body;
+        await Comment.create({ blog, name, email, content });
         res.status(201).json({ success: true, message: 'Comment added for review' })
     } catch (error) {
         res.status(500).json({ success: false, message: error.message })
@@ -185,11 +192,23 @@ export const getBlogComments = async (req, res) => {
     }
 }
 
-// Generate blog content using Google Gemini AI based on prompt
+// Generate blog content using Google Gemini AI based on prompt and image
 export const generateContent = async (req, res) => {
     try {
-        const { prompt } = req.body;
-        const content = await main(prompt + ' Generate a blog content for this topic in simple text format')
+        const { title, subTitle, image } = req.body;
+
+        // System Prompt + User Inputs
+        const prompt = `
+        Role: Expert SEO Writer.
+        Task: Write an engaging blog post based on the user's title and the visual context of the provided image.
+
+        Title: ${title}
+        Subtitle: ${subTitle}
+
+        Output: HTML formatted body. Do not include markdown code blocks. Just the HTML content.
+        `;
+
+        const content = await main(prompt, image)
         res.status(200).json({ success: true, content })
     } catch (error) {
         res.status(500).json({ success: false, message: error.message })
@@ -285,6 +304,12 @@ export const searchBlogs = async (req, res) => {
         // Add category filter if provided
         if (category) {
             searchQuery.category = category;
+        }
+        if (req.query.tags) {
+            searchQuery.tags = { $in: req.query.tags.split(',') };
+        }
+        if (req.query.author) {
+            searchQuery.author = req.query.author;
         }
 
         // Calculate pagination

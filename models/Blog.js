@@ -9,6 +9,8 @@ const blogSchema = new mongoose.Schema({
         required: true,
         enum: ['Technology', 'Startup', 'Lifestyle', 'Finance']
     },
+    tags: {type: [String], default: []},
+    author: {type: mongoose.Schema.Types.ObjectId, ref: 'User'}, // Reference to User model (to be created)
     image: {type: String, required: true},
     isPublished: {type: Boolean, required: true, default: false},
 },{timestamps: true});

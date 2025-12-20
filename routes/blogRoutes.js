@@ -2,6 +2,7 @@
 import { addBlog, addComment, deleteBlogById, generateContent, getAllBlogs, getBlogById, getBlogComments, togglePublish, updateBlog } from "../controllers/blogController.js";
 import upload from "../middleware/multer.js";
 import auth from "../middleware/auth.js";
+import authorizeRoles from "../middleware/authorizeRoles.js";
 
 const blogRouter = express.Router();
 
@@ -54,7 +55,7 @@ const blogRouter = express.Router();
  *       500:
  *         $ref: '#/components/responses/ServerError'
  */
-blogRouter.post("/add", upload.single('image'), auth, addBlog);
+blogRouter.post("/add", upload.single('image'), auth, authorizeRoles('admin', 'super_admin'), addBlog);
 
 /**
  * @swagger
@@ -193,7 +194,7 @@ blogRouter.get('/:blogId', getBlogById);
  *       500:
  *         $ref: '#/components/responses/ServerError'
  */
-blogRouter.post('/delete', auth, deleteBlogById);
+blogRouter.post('/delete', auth, authorizeRoles('admin', 'super_admin'), deleteBlogById);
 
 /**
  * @swagger
@@ -237,7 +238,7 @@ blogRouter.post('/delete', auth, deleteBlogById);
  *       500:
  *         $ref: '#/components/responses/ServerError'
  */
-blogRouter.post('/toggle-publish', auth, togglePublish);
+blogRouter.post('/toggle-publish', auth, authorizeRoles('admin', 'super_admin'), togglePublish);
 
 /**
  * @swagger

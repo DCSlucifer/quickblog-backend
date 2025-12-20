@@ -1,6 +1,7 @@
 ﻿import express from "express";
-import { adminLogin, approveCommentById, deleteCommentById, getAllBlogsAdmin, getAllComments, getDashboard } from "../controllers/adminController.js";
+import { adminLogin, deleteComment, adminDashboard, getAllComments, getAllBlogsAdmin, approveComment, deleteBlogAdmin } from "../controllers/adminController.js";
 import auth from "../middleware/auth.js";
+import authorizeRoles from "../middleware/authorizeRoles.js";
 
 const adminRouter = express.Router();
 
@@ -8,7 +9,7 @@ const adminRouter = express.Router();
  * @swagger
  * tags:
  *   name: Admin
- *   description: Admin management endpoints
+ *   description: Admin dashboard and management endpoints
  */
 
 /**
@@ -16,58 +17,25 @@ const adminRouter = express.Router();
  * /api/admin/login:
  *   post:
  *     summary: Admin login
- *     description: Authenticate admin user and receive a JWT token for accessing protected endpoints. Token expires in 24 hours.
+ *     description: Authenticate admin and return JWT token.
  *     tags: [Admin]
  *     requestBody:
  *       required: true
  *       content:
  *         application/json:
  *           schema:
- *             $ref: '#/components/schemas/LoginRequest'
- *           examples:
- *             validLogin:
- *               summary: Valid admin credentials
- *               value:
- *                 email: admin@quickblog.com
- *                 password: admin123
+ *             type: object
+ *             required: [email, password]
+ *             properties:
+ *               email:
+ *                 type: string
+ *                 format: email
+ *               password:
+ *                 type: string
+ *                 format: password
  *     responses:
  *       200:
- *         description: Login successful - Returns JWT token
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/LoginResponse'
- *             example:
- *               success: true
- *               token: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJlbWFpbCI6ImFkbWluQHF1aWNrYmxvZy5jb20iLCJpYXQiOjE2MzQwNjI4MDB9.abc123
- *       400:
- *         $ref: '#/components/responses/ValidationError'
- *       401:
- *         description: Invalid credentials
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- *             example:
- *               success: false
- *               message: Invalid Credentials
- *       500:
- *         $ref: '#/components/responses/ServerError'
- */
-adminRouter.post("/login", adminLogin);
-
-/**
- * @swagger
- * /api/admin/comments:
- *   get:
- *     summary: Get all comments
- *     description: Retrieve all comments from all blogs with populated blog details. Requires admin authentication. Comments are sorted by creation date (newest first).
- *     tags: [Admin]
- *     security:
- *       - bearerAuth: []
- *     responses:
- *       200:
- *         description: Successfully retrieved all comments
+ *         description: Login successful
  *         content:
  *           application/json:
  *             schema:
@@ -75,102 +43,96 @@ adminRouter.post("/login", adminLogin);
  *               properties:
  *                 success:
  *                   type: boolean
- *                   example: true
- *                 comments:
- *                   type: array
- *                   items:
- *                     allOf:
- *                       - $ref: '#/components/schemas/Comment'
- *                       - type: object
- *                         properties:
- *                           blog:
- *                             $ref: '#/components/schemas/Blog'
+ *                 token:
+ *                   type: string
  *       401:
- *         $ref: '#/components/responses/UnauthorizedError'
+ *         description: Invalid credentials
  *       500:
- *         $ref: '#/components/responses/ServerError'
+ *         description: Server error
  */
-adminRouter.get("/comments", auth, getAllComments);
+adminRouter.post('/login', adminLogin);
+/**
+ * @swagger
+ * /api/admin/dashboard:
+ *   get:
+ *     summary: Get dashboard stats
+ *     description: Retrieve statistics for the admin dashboard. Requires admin authentication.
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Dashboard statistics
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 stats:
+ *                   type: object
+ *       401:
+ *         description: Unauthorized
+ *       500:
+ *         description: Server error
+ */
+adminRouter.get('/dashboard', auth, authorizeRoles('admin', 'super_admin', 'moderator'), adminDashboard);
 
 /**
  * @swagger
  * /api/admin/blogs:
  *   get:
- *     summary: Get all blogs (Admin view)
- *     description: Retrieve all blogs including drafts and unpublished content. Requires admin authentication. Blogs are sorted by creation date (newest first).
+ *     summary: Get all blogs (admin)
+ *     description: Retrieve all blogs including unpublished ones. Requires admin authentication.
  *     tags: [Admin]
  *     security:
  *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: category
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: status
+ *         schema:
+ *           type: string
  *     responses:
  *       200:
- *         description: Successfully retrieved all blogs
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                   example: true
- *                 blogs:
- *                   type: array
- *                   items:
- *                     $ref: '#/components/schemas/Blog'
- *       401:
- *         $ref: '#/components/responses/UnauthorizedError'
+ *         description: List of blogs
  *       500:
- *         $ref: '#/components/responses/ServerError'
+ *         description: Server error
  */
-adminRouter.get("/blogs", auth, getAllBlogsAdmin);
+adminRouter.get('/blogs', auth, authorizeRoles('admin', 'super_admin', 'moderator'), getAllBlogsAdmin);
 
 /**
  * @swagger
- * /api/admin/delete-comment:
- *   post:
- *     summary: Delete a comment by ID
- *     description: Permanently delete a specific comment. Requires admin authentication.
+ * /api/admin/comments:
+ *   get:
+ *     summary: Get all comments (admin)
+ *     description: Retrieve all comments. Requires admin authentication.
  *     tags: [Admin]
  *     security:
  *       - bearerAuth: []
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required: [id]
- *             properties:
- *               id:
- *                 type: string
- *                 description: MongoDB ObjectId of the comment
- *                 example: 507f1f77bcf86cd799439012
- *           example:
- *             id: 507f1f77bcf86cd799439012
+ *     parameters:
+ *       - in: query
+ *         name: status
+ *         schema:
+ *           type: string
  *     responses:
  *       200:
- *         description: Comment successfully deleted
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/SuccessResponse'
- *             example:
- *               success: true
- *               message: Comment deleted successfully
- *       400:
- *         $ref: '#/components/responses/ValidationError'
- *       401:
- *         $ref: '#/components/responses/UnauthorizedError'
+ *         description: List of comments
  *       500:
- *         $ref: '#/components/responses/ServerError'
+ *         description: Server error
  */
-adminRouter.post("/delete-comment", auth, deleteCommentById);
+adminRouter.get('/comments', auth, authorizeRoles('admin', 'super_admin', 'moderator'), getAllComments);
 
 /**
  * @swagger
  * /api/admin/approve-comment:
  *   post:
- *     summary: Approve a comment by ID
- *     description: Approve a comment to make it visible on the blog. Requires admin authentication.
+ *     summary: Approve a comment
+ *     description: Approve a pending comment. Requires admin privileges.
  *     tags: [Admin]
  *     security:
  *       - bearerAuth: []
@@ -184,68 +146,62 @@ adminRouter.post("/delete-comment", auth, deleteCommentById);
  *             properties:
  *               id:
  *                 type: string
- *                 description: MongoDB ObjectId of the comment
- *                 example: 507f1f77bcf86cd799439012
- *           example:
- *             id: 507f1f77bcf86cd799439012
  *     responses:
  *       200:
- *         description: Comment successfully approved
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/SuccessResponse'
- *             example:
- *               success: true
- *               message: Comment approved successfully
- *       400:
- *         $ref: '#/components/responses/ValidationError'
- *       401:
- *         $ref: '#/components/responses/UnauthorizedError'
+ *         description: Comment approved
  *       500:
- *         $ref: '#/components/responses/ServerError'
+ *         description: Server error
  */
-adminRouter.post("/approve-comment", auth, approveCommentById);
+adminRouter.post('/approve-comment', auth, authorizeRoles('admin', 'super_admin', 'moderator'), approveComment);
 
 /**
  * @swagger
- * /api/admin/dashboard:
- *   get:
- *     summary: Get dashboard statistics
- *     description: Retrieve comprehensive dashboard data including total blogs, comments, drafts, and 5 most recent blogs. Requires admin authentication.
+ * /api/admin/delete-comment:
+ *   post:
+ *     summary: Delete a comment
+ *     description: Permanently delete a comment. Requires admin privileges.
  *     tags: [Admin]
  *     security:
  *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [id]
+ *             properties:
+ *               id:
+ *                 type: string
  *     responses:
  *       200:
- *         description: Successfully retrieved dashboard data
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                   example: true
- *                 dashboardData:
- *                   $ref: '#/components/schemas/DashboardData'
- *             example:
- *               success: true
- *               dashboardData:
- *                 blogs: 47
- *                 comments: 132
- *                 drafts: 8
- *                 recentBlogs:
- *                   - _id: 507f1f77bcf86cd799439011
- *                     title: Introduction to React Hooks
- *                     category: Technology
- *                     isPublished: true
- *                     createdAt: 2024-01-15T10:30:00.000Z
- *       401:
- *         $ref: '#/components/responses/UnauthorizedError'
+ *         description: Comment deleted
  *       500:
- *         $ref: '#/components/responses/ServerError'
+ *         description: Server error
  */
-adminRouter.get("/dashboard", auth, getDashboard);
+adminRouter.post('/delete-comment', auth, authorizeRoles('super_admin', 'moderator'), deleteComment);
+
+/**
+ * @swagger
+ * /api/admin/blog/delete/{id}:
+ *   delete:
+ *     summary: Delete a blog (Admin)
+ *     description: Delete a blog from admin panel. Requires admin privileges.
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Blog deleted
+ *       500:
+ *         description: Server error
+ */
+adminRouter.delete('/blog/delete/:id', auth, authorizeRoles('admin', 'super_admin'), deleteBlogAdmin);
 
 export default adminRouter;
