@@ -1,8 +1,10 @@
 // Import necessary dependencies
 import fs from 'fs'
+import mongoose from 'mongoose';
 import imagekit from '../configs/imageKit.js';
 import Blog from '../models/Blog.js';
 import Comment from '../models/Comment.js';
+import User from '../models/User.js';
 import main from '../configs/gemini.js';
 import { sendNewBlogNotification, sendBlogUpdateNotification } from '../utils/emailService.js';
 
@@ -60,49 +62,103 @@ export const addBlog = async (req, res) => {
     }
 }
 
-// Fetch all published blogs for public view with pagination
+// Get all blogs (Public) - supports filtering and sorting
 export const getAllBlogs = async (req, res) => {
     try {
-        // Optional pagination parameters
-        const page = parseInt(req.query.page) || 1;
-        const limit = parseInt(req.query.limit) || 10;
-        const category = req.query.category;
+        const { category, sort, page = 1, limit = 12 } = req.query;
+        let matchStage = { isPublished: true };
 
-        // Calculate skip value for pagination
-        const skip = (page - 1) * limit;
+        if (category) matchStage.category = category;
 
-        // Build query
-        const query = { isPublished: true };
-        if (category) {
-            query.category = category;
-        }
+        // Improved Tag Filtering (if passed via query even if UI removed)
         if (req.query.tags) {
-            query.tags = { $in: req.query.tags.split(',') };
+            const tagsArray = req.query.tags.split(',').map(tag => tag.trim()).filter(tag => tag !== '');
+            if (tagsArray.length > 0) {
+                matchStage.tags = { $in: tagsArray };
+            }
         }
+
+        // Author Filtering (Backwards compatibility / Direct API usage)
         if (req.query.author) {
-            query.author = req.query.author;
+            const authorInput = req.query.author.trim();
+            if (mongoose.Types.ObjectId.isValid(authorInput)) {
+                matchStage.author = new mongoose.Types.ObjectId(authorInput);
+            }
+            // Note: Complex name search not supported in this simple match stage without pre-query,
+            // but UI removed author input anyway. keeping ID support.
         }
 
-        // Fetch blogs with pagination
-        const blogs = await Blog.find(query)
-            .populate('author', 'name email')
-            .sort({ createdAt: -1 })
-            .skip(skip)
-            .limit(limit);
+        // Sorting Logic
+        let sortStage = { createdAt: -1 }; // Default Newest
+        if (sort === 'oldest') sortStage = { createdAt: 1 };
+        if (sort === 'most-comments') sortStage = { commentCount: -1 };
 
-        // Get total count for pagination metadata
-        const total = await Blog.countDocuments(query);
+        // Pagination calculation
+        const skip = (parseInt(page) - 1) * parseInt(limit);
+
+        // Aggregation Pipeline
+        const blogs = await Blog.aggregate([
+            { $match: matchStage },
+            {
+                $lookup: {
+                    from: "comments",
+                    localField: "_id",
+                    foreignField: "blog",
+                    as: "comments"
+                }
+            },
+            {
+                $addFields: {
+                    commentCount: { $size: "$comments" }
+                }
+            },
+            { $sort: sortStage },
+            { $skip: skip },
+            { $limit: parseInt(limit) },
+            {
+                $lookup: {
+                    from: "users",
+                    localField: "author",
+                    foreignField: "_id",
+                    as: "author"
+                }
+            },
+            {
+                $unwind: {
+                    path: "$author",
+                    preserveNullAndEmptyArrays: true
+                }
+            },
+             {
+                $project: {
+                    title: 1,
+                    description: 1,
+                    category: 1,
+                    isPublished: 1,
+                    createdAt: 1,
+                    image: 1,
+                    tags: 1,
+                    commentCount: 1,
+                    "author.name": 1,
+                    "author.email": 1
+                }
+            }
+        ]);
+
+        // Get total count for pagination
+        const total = await Blog.countDocuments(matchStage);
 
         res.status(200).json({
             success: true,
             blogs,
             pagination: {
-                currentPage: page,
-                totalPages: Math.ceil(total / limit),
+                currentPage: parseInt(page),
+                totalPages: Math.ceil(total / parseInt(limit)),
                 totalBlogs: total,
-                blogsPerPage: limit
+                blogsPerPage: parseInt(limit)
             }
-        })
+        });
+
     } catch (error) {
         res.status(500).json({ success: false, message: error.message })
     }
@@ -112,7 +168,7 @@ export const getAllBlogs = async (req, res) => {
 export const getBlogById = async (req, res) => {
     try {
         const { blogId } = req.params;
-        const blog = await Blog.findById(blogId)
+        const blog = await Blog.findById(blogId).populate('author', 'name email'); // Populate author details
 
         // Check if blog exists
         if (!blog) {
@@ -284,45 +340,149 @@ export const updateBlog = async (req, res) => {
 // Search blogs by title, description, or category
 export const searchBlogs = async (req, res) => {
     try {
-        const { q, category, page = 1, limit = 10 } = req.query;
+        const { q, category, sort, page = 1, limit = 10 } = req.query;
+        const pipeline = [];
 
-        if (!q && !category) {
-            return res.status(400).json({
-                success: false,
-                message: 'Search query (q) or category is required'
+        // 1. Match Stage (Text Search must be first)
+        let matchStage = { isPublished: true };
+
+        if (q) {
+            matchStage.$text = { $search: `"${q}"` };
+        }
+
+        if (category) {
+            matchStage.category = category;
+        }
+
+        pipeline.push({ $match: matchStage });
+
+        // 2. Project Score (if text search) - Essential for sorting by relevance later
+        if (q) {
+            pipeline.push({
+                $addFields: { score: { $meta: "textScore" } }
             });
         }
 
-        // Build search query
-        const searchQuery = { isPublished: true };
-
-        // Add text search if query provided
-        if (q) {
-            searchQuery.$text = { $search: q };
-        }
-
-        // Add category filter if provided
-        if (category) {
-            searchQuery.category = category;
-        }
+        // 3. Additional Filters (Tags, Author)
         if (req.query.tags) {
-            searchQuery.tags = { $in: req.query.tags.split(',') };
+            const tagsArray = req.query.tags.split(',').map(tag => tag.trim()).filter(tag => tag !== '');
+            if (tagsArray.length > 0) {
+                pipeline.push({ $match: { tags: { $in: tagsArray } } });
+            }
         }
+
         if (req.query.author) {
-            searchQuery.author = req.query.author;
+             const authorInput = req.query.author.trim();
+             if (mongoose.Types.ObjectId.isValid(authorInput)) {
+                 pipeline.push({ $match: { author: new mongoose.Types.ObjectId(authorInput) } });
+             } else {
+                  const users = await User.find({ name: { $regex: authorInput, $options: 'i' } }).select('_id');
+                  const userIds = users.map(user => user._id);
+                  if (userIds.length > 0) {
+                       pipeline.push({ $match: { author: { $in: userIds } } });
+                  } else {
+                       // Force empty result if author not found
+                       return res.status(200).json({
+                           success: true,
+                           blogs: [],
+                           pagination: {
+                               currentPage: parseInt(page),
+                               totalPages: 0,
+                               totalResults: 0,
+                               resultsPerPage: parseInt(limit)
+                           }
+                       });
+                  }
+             }
         }
 
-        // Calculate pagination
-        const skip = (parseInt(page) - 1) * parseInt(limit);
+        // 4. Lookup Comments & Count
+        pipeline.push({
+            $lookup: {
+                from: "comments",
+                localField: "_id",
+                foreignField: "blog",
+                as: "comments"
+            }
+        });
+        pipeline.push({
+             $addFields: { commentCount: { $size: "$comments" } }
+        });
 
-        // Execute search with pagination
-        const blogs = await Blog.find(searchQuery)
-            .sort(q ? { score: { $meta: 'textScore' } } : { createdAt: -1 })
-            .skip(skip)
-            .limit(parseInt(limit));
+        // 5. Sorting
+        let sortStage = {};
+        if (sort === 'most-comments') {
+            sortStage = { commentCount: -1 };
+        } else if (sort === 'oldest') {
+            sortStage = { createdAt: 1 };
+        } else if (sort === 'newest') {
+            sortStage = { createdAt: -1 };
+        } else {
+            // Default sort logic
+            if (q) {
+                sortStage = { score: { $meta: "textScore" } };
+            } else {
+                sortStage = { createdAt: -1 };
+            }
+        }
+        pipeline.push({ $sort: sortStage });
+
+        // 6. Pagination
+        const skip = (parseInt(page) - 1) * parseInt(limit);
+        pipeline.push({ $skip: skip });
+        pipeline.push({ $limit: parseInt(limit) });
+
+        // 7. Lookup Author Details
+        pipeline.push({
+            $lookup: {
+                from: "users",
+                localField: "author",
+                foreignField: "_id",
+                as: "author"
+            }
+        });
+        pipeline.push({
+            $unwind: { path: "$author", preserveNullAndEmptyArrays: true }
+        });
+
+        // 8. Final Projection
+        pipeline.push({
+            $project: {
+                title: 1,
+                description: 1,
+                category: 1,
+                isPublished: 1,
+                createdAt: 1,
+                image: 1,
+                tags: 1,
+                commentCount: 1,
+                score: 1,
+                "author.name": 1,
+                "author.email": 1
+            }
+        });
+
+        // Execute Aggregation
+        const blogs = await Blog.aggregate(pipeline);
 
         // Get total count
-        const total = await Blog.countDocuments(searchQuery);
+        const countQuery = { ...matchStage };
+        if (req.query.tags) {
+             const tagsArray = req.query.tags.split(',').map(tag => tag.trim()).filter(tag => tag !== '');
+             if (tagsArray.length > 0) countQuery.tags = { $in: tagsArray };
+        }
+         if (req.query.author) {
+             const authorInput = req.query.author.trim();
+             if (mongoose.Types.ObjectId.isValid(authorInput)) {
+                 countQuery.author = authorInput;
+             } else {
+                  const users = await User.find({ name: { $regex: authorInput, $options: 'i' } }).select('_id');
+                  const userIds = users.map(user => user._id);
+                  countQuery.author = { $in: userIds };
+             }
+        }
+
+        const total = await Blog.countDocuments(countQuery);
 
         res.status(200).json({
             success: true,

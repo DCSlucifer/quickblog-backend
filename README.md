@@ -74,6 +74,7 @@ Traditional blogging platforms require significant time investment for content c
 ### Security & Admin
 - JWT-based authentication
 - Admin dashboard for moderation
+- **Granular Comment Management (Email & Status)**
 - Role-based access control (RBAC)
 - API rate limiting
 
@@ -83,10 +84,11 @@ Traditional blogging platforms require significant time investment for content c
 <td width="50%">
 
 ### Search & Discovery
-- Full-text search with scoring
+- **Strict Phrase Search Algorithm**
+- **Dynamic Sorting (Newest, Popular, Oldest)**
+- Full-text search with relevance scoring
 - Pagination support
 - Related posts suggestions
-- Trending content algorithms
 
 </td>
 <td width="50%">
@@ -419,6 +421,9 @@ curl -X POST "http://localhost:3000/api/admin/generate" \
 
 ---
 
+
+---
+
 ## Deployment
 
 ### Backend Deployment (Recommended: Render/Railway)
@@ -476,10 +481,9 @@ QuickBlog-FullStack/
 
 ### Academic Acknowledgments
 
-This project was developed as part of the **Capstone Project** at **UIT**.
+This project was developed as part of the **Capstone Project** at **[UIT - University of Information Technology]**.
 
-**Faculty Advisor:**
-- Dr. Nguyen Thanh Binh — *Project Supervisor*
+
 
 ### Special Thanks
 

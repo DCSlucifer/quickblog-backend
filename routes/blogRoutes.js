@@ -1,5 +1,5 @@
 ﻿import express from "express";
-import { addBlog, addComment, deleteBlogById, generateContent, getAllBlogs, getBlogById, getBlogComments, togglePublish, updateBlog } from "../controllers/blogController.js";
+import { addBlog, addComment, deleteBlogById, generateContent, getAllBlogs, getBlogById, getBlogComments, togglePublish, updateBlog, searchBlogs } from "../controllers/blogController.js";
 import upload from "../middleware/multer.js";
 import auth from "../middleware/auth.js";
 import authorizeRoles from "../middleware/authorizeRoles.js";
@@ -116,6 +116,46 @@ blogRouter.post("/add", upload.single('image'), auth, authorizeRoles('admin', 's
  *         $ref: '#/components/responses/ServerError'
  */
 blogRouter.get('/all', getAllBlogs);
+
+/**
+ * @swagger
+ * /api/blog/search:
+ *   get:
+ *     summary: Search blogs
+ *     description: Search blogs by title, query, category, tags, or author
+ *     tags: [Blog]
+ *     parameters:
+ *       - in: query
+ *         name: q
+ *         schema:
+ *           type: string
+ *         description: Search query
+ *       - in: query
+ *         name: category
+ *         schema:
+ *           type: string
+ *         description: Category filter
+ *       - in: query
+ *         name: tags
+ *         schema:
+ *           type: string
+ *         description: Tags filter
+ *       - in: query
+ *         name: author
+ *         schema:
+ *           type: string
+ *         description: Author filter
+ *     responses:
+ *       200:
+ *         description: Search results
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SuccessResponse'
+ *       500:
+ *         $ref: '#/components/responses/ServerError'
+ */
+blogRouter.get('/search', searchBlogs);
 
 /**
  * @swagger

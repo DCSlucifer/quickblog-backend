@@ -46,20 +46,64 @@ export const adminLogin = async (req, res) => {
     }
 }
 
-// Fetch all blogs for admin panel - sorted by creation date with filtering
+// Fetch all blogs for admin panel - sorted by creation date or comment count
 export const getAllBlogsAdmin = async (req, res) => {
     try {
-        const { category, status, author, tags } = req.query;
-        let query = {};
+        const { category, status, sort } = req.query;
+        let matchStage = {};
 
-        if (category) query.category = category;
-        if (status) query.isPublished = status === 'published';
-        if (author) query.author = author;
-        if (tags) query.tags = { $in: tags.split(',') };
+        if (category) matchStage.category = category;
+        if (status) matchStage.isPublished = status === 'published';
 
-        const blogs = await Blog.find(query)
-            .populate('author', 'name')
-            .sort({ createdAt: -1 });
+        let sortStage = { createdAt: -1 }; // Default Newest
+        if (sort === 'oldest') sortStage = { createdAt: 1 };
+        if (sort === 'most-comments') sortStage = { commentCount: -1 };
+
+        const blogs = await Blog.aggregate([
+            { $match: matchStage },
+            {
+                $lookup: {
+                    from: "comments",
+                    localField: "_id",
+                    foreignField: "blog",
+                    as: "comments"
+                }
+            },
+            {
+                $addFields: {
+                    commentCount: { $size: "$comments" }
+                }
+            },
+            {
+                $sort: sortStage
+            },
+            {
+                $lookup: {
+                    from: "users",
+                    localField: "author",
+                    foreignField: "_id",
+                    as: "author"
+                }
+            },
+            {
+                $unwind: {
+                    path: "$author",
+                    preserveNullAndEmptyArrays: true
+                }
+            },
+            {
+                $project: {
+                    title: 1,
+                    category: 1,
+                    isPublished: 1,
+                    createdAt: 1,
+                    image: 1,
+                    commentCount: 1,
+                    "author.name": 1
+                }
+            }
+        ]);
+
         res.status(200).json({ success: true, blogs })
     } catch (error) {
         res.status(500).json({ success: false, message: error.message })
